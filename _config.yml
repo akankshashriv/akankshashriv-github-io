@@ -12,10 +12,12 @@ paginate: 3
 
 # Links
 links:
-  - title: "home"
-    url: /index
   - title: "about"
-    url: /about
+    url: /index
   - title: "professional"
     url: /prof
+  - title: "resume"
+    url: /resume.pdf
+  - title: "github"
+    url: "http://github.com/akankshashriv"
   
