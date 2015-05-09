@@ -45,6 +45,9 @@ a:link, a:visited, a:active, a:hover {
   color: #C00;
   text-decoration: none;
 }
+p{
+  text-align : justify;
+}
 
 /* menu */
 .page-link {
