@@ -396,13 +396,13 @@ nav ul li {
 /******************************************************************************************************************/
 
 .jumbotron {
-    background: url(../img/hero.jpg) repeat-y;
+    /*background: url(../img/hero.jpg) repeat-y;*/
     background-size: cover;
-    background-color: #000;
+    background-color: #ccc;
     position: relative;
     padding-top: 5rem;
     padding-bottom: 5rem;
-    text-shadow: 0px 1px 1px #fff;
+    /*text-shadow: 0px 1px 1px #fff;*/
     border-radius: 0;
     height: calc(100vh - 75px);
     width: 100%;
@@ -1162,7 +1162,7 @@ nav ul li {
     transition: all .3s;
     border-bottom: 2px solid #bbb;
     color: #fff;
-    font-family: 'Roboto Condensed', sans-serif;    
+    font-family: 'Roboto Condensed', sans-serif;
 }
 
 #contact input:focus, #contact textarea:focus {
