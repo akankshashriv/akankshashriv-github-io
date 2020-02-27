@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SHAP</title>
+  <link rel="stylesheet" href="https://stackedit.io/style.css" />
+</head>
+
+<body class="stackedit">
+  <div class="stackedit__left">
+    <div class="stackedit__toc">
+      
+<ul>
+<li><a href="#shap">SHAP</a>
+<ul>
+<li><a href="#shapley-values">Shapley Values</a></li>
+<li><a href="#additive-feature-attribution-models">Additive Feature Attribution Models</a></li>
+<li><a href="#shap-1">SHAP</a></li>
+</ul>
+</li>
+</ul>
+
+    </div>
+  </div>
+  <div class="stackedit__right">
+    <div class="stackedit__html">
+      <h1 id="shap">SHAP</h1>
+<p>A machine learning model explanation technique.</p>
+<h2 id="shapley-values">Shapley Values</h2>
+<p>These are feature importances for linear models in the presence of multicollinearity.</p>
+<h3 id="intuition">Intuition</h3>
+<blockquote>
+<p>[Coalition Game Theory] Let's say multiple players are playing a game which results in a collective payoff. What would be the fairest way to divide up that payoff among the players?</p>
+</blockquote>
+<p>Consider an example : Bob, Alice and John are a team of salespeople at LinkedIn. Their team has a collective payoff of USD 10,000 (= 10 units). Their bonuses are dependent on their contributions. Now, how do we decide a fair distribution of the collective payoff between Bob, Alice and John? In a semantic sense, each person's bonus depends on what they bring to the group's overall outcome.</p>
+<pre><code>Game : Sales
+Players : Alice, Bob and Chris
+Payoff : 10 units
+Constributions of each player?
+</code></pre>
+<p>One way of solving this is by keeping track of <em>marginal contributions</em> of each person.</p>
+<p><strong>Sequentially</strong><br>
+Let's say Alice joined the team first. Payoff at that time was 5 units.<br>
+Then Bob joined, payoff went up to 9 units.<br>
+Finally, Chris joined, and final total payoff was 10 units.</p>
+<p>Thus, marginal contributions are:</p>
+<pre><code>Alice : 5 units
+Bob : 9-5 = 4 units
+Chris : 10-9 = 1 unit
+</code></pre>
+<p>There is a problem here - what if John and Alice have very similar, overlapping skill sets? Which means, John could have brought 3 units of marginal improvement if he joined first. In that case, payoffs would be:</p>
+<pre><code>Alice : 5 units
+Chris : 3 units
+Bob : 2 units
+</code></pre>
+<p>And in practice, if everyone joined simultaneously, then how do we decide the individual payoffs?</p>
+<blockquote>
+<p>Each player's marginal contribution should be calculate such that it is sequence independent. Thus, player's marginal contribution is a value which is averaged over every possible sequence in which the players could have been added to the game.</p>
+</blockquote>
+<p>So in the above case, we would simulate following sequences: <code>ABC, ACB, BAC, BCA, CAB, CBA</code>.</p>
+<p><strong>Algorithm</strong></p>
+<pre><code>shapley = []
+m = []
+For each player p:
+	For each sequence S: 
+		m[S] := marginal payoff of p given S 
+	shapley[p] = average(m.values)
+</code></pre>
+<p><em><strong>Note.</strong></em> <em>We assume we have all the information about all possible sequences. That is, we know the payoff function</em> $f(p_1, p_2... p_n)$.</p>
+<p>Say we want to calculate the marginal contribution of player <code>C</code>.<br>
+When <code>C</code> joined the team, the team already had <code>A</code> and <code>B</code>. Does it matter for <code>C</code> which order <code>A</code> and <code>B</code> joined in? Not at all! Together the total payoff will be the same irrespective of who joined first (individual payoffs will of course vary). So, for both sequences <code>AB</code> and <code>BA</code>, we can calculate the payoff function once $f(A, B)$. Similarly, payoff function after <code>C</code> joins is $f(A, B, C)$, and track how much was added when <code>C</code> came in.<br>
+$$f(A, B, C) - f(A, B)$$<br>
+But this value is for 2 sequences - we need to factor that in.<br>
+$$2 * f(A, B, C) - f(A, B)$$</p>
+<p>Now, let's look at 5 players <code>A, B, C, D, E</code>. We need to account for <code>D</code> and <code>E</code> coming after <code>C</code>. <code>DE</code> or <code>ED</code> both could come after <code>C</code>. Even their sequence doesn't matter for <code>C</code>. All in all, $f(A, B, C) - f(A, B)$ represents <strong>4</strong> sequences : <code>ABCDE</code>, <code>ABCED</code>, <code>BACDE</code>, and <code>BACED</code>, and should be weighed 4 times in our average.</p>
+<p>What about <code>EDCBA</code> ?</p>
+<h3 id="mathematical-formulation">Mathematical Formulation</h3>
+<p>How do we represent ALL of this in a nicely wrapped formula?</p>
+<p>Let's say we have a set of players $F$.  We will calculate Shapley value for player $i$.<br>
+Any subset of $F$ that doesn't contain $i$ is $S$, that is,  $S \subseteq F\setminus {i}$.<br>
+Let's say players in $S$ joined first. Then $i$ joined. Players left after joined in any sequence.<br>
+Payoff of $i$ in any one of these sequences = $f_{S\cup {i}} - f_S$</p>
+<p>Number of players in $S$  = $|S|$<br>
+Number of permutations of players in $S$  = $|S|!$</p>
+<p>Number of players left after $S$ and $i$  = $|F| - |S| - 1$<br>
+Number of permutations of players left  = $(|F| - |S| - 1)!$</p>
+<p>Thus, weighted payoff : $|S|!(|F| - |S| - 1)! \ \big[f_{S\cup {i}} - f_S\big]$.</p>
+<p>Formula for Shapley Values:<br>
+$$<br>
+\phi_i = \sum_{S \subseteq F\setminus {i}} \frac{|S|!(|F| - |S| - 1)!}{|F|!} \big[f_{S\cup {i}} - f_S\big]<br>
+$$</p>
+<h3 id="credit-attribution">Credit Attribution</h3>
+<p>Axioms of credit attribution:</p>
+<ol>
+<li>The sum of what everyone receives should equal the total reward.</li>
+<li>[Missingness] If a player never adds any marginal value, their individual payoff should be 0.</li>
+<li>[Symmetry] If two players always add same marginal value to any subset to which they are added, their individual payoff should be the same.</li>
+<li>[Additivity] If a game is composed of two subgames, you should be able to add the individual payoffs calculated on the subgames, and that should match the individual payoffs calculated for the full game.</li>
+</ol>
+<p>**Shapley is the only method that satisfies these.<br>
+Ref. <a href="https://www.lamsade.dauphine.fr/~airiau/Teaching/CoopGames/2011/coopgames-7%5B8up%5D.pdf">Notes on proof</a></p>
+<h3 id="whats-this-got-to-do-with-machine-learning">What's this got to do with Machine Learning?</h3>
+<pre><code>Game : Prediction task of a single data point j
+Players : Feature values of j
+Payoff : Actual prediction of j - Avg prediction of all instances
+</code></pre>
+<p>Example:<br>
+A machine learning model to predict apartment prices.</p>
+
+<table>
+<thead>
+<tr>
+<th></th>
+<th>park</th>
+<th>area</th>
+<th>pets</th>
+<th>floor</th>
+<th>price</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>nearby</td>
+<td>50</td>
+<td>banned</td>
+<td>2</td>
+<td>300000</td>
+</tr>
+<tr>
+<td>2</td>
+<td>nearby</td>
+<td>50</td>
+<td>banned</td>
+<td>1</td>
+<td>310000</td>
+</tr>
+<tr>
+<td>3</td>
+<td>nearby</td>
+<td>50</td>
+<td>allowed</td>
+<td>1</td>
+<td>320000</td>
+</tr>
+</tbody>
+</table><p>To calculate the Shapley value for <code>pets=banned</code> feature value for data point <code>1</code>, following coalitions are possible:</p>
+<ul>
+<li><code>No feature values</code></li>
+<li><code>park=nearby</code></li>
+<li><code>area=50</code></li>
+<li><code>floor=2</code></li>
+<li><code>park=nearby</code>+<code>area=50</code></li>
+<li><code>park=nearby</code>+<code>floor=2</code></li>
+<li><code>area=50</code>+<code>floor=2</code></li>
+<li><code>park=nearby</code>+<code>area=50</code>+<code>floor=2</code></li>
+</ul>
+<p>For each of these, we compute the predicted apartment price with and without <code>pets=banned</code>, and take the difference to get the marginal contribution. Shapley value = weighted average of these values.</p>
+<p>How do we get predictions for coalitions where only 1 or 2 feature values are present? We do this by randomly drawing another datapoint from our dataset and using feature values from it, and then making predictions on the newly created feature value vector. We get better estimates by repeating this sampling step and average those contributions.</p>
+<h3 id="advantages">Advantages</h3>
+<ol>
+<li>The difference between the prediction and the average prediction is <strong>fairly distributed</strong> among the feature values of the instance – the Efficiency property of Shapley values. This property distinguishes the Shapley value from other methods such as LIME.</li>
+<li>The Shapley value allows <strong>contrastive explanations</strong>. Instead of comparing a prediction to the average prediction of the entire dataset, you could compare it to a subset or even to a single data point.</li>
+<li>Solid theory backed!</li>
+</ol>
+<h3 id="disadvantages">Disadvantages</h3>
+<ol>
+<li>LOT of computing time. Subsets - $2^k$ possibilities. Absence of a feature has to be simulated by drawing random instances.</li>
+<li>Can be misinterpreted.<br>
+The Shapley value of a feature value is not the difference of the predicted value after removing the feature from the model training. The interpretation of the Shapley value is: Given the current set of feature values, the contribution of a feature value to the difference between the actual prediction and the mean prediction is the estimated Shapley value.</li>
+<li>Sparse explanations not possible - Shapley always uses all features =&gt; SHAP!</li>
+<li>Simple value per feature, it's not a prediction model like LIME.<br>
+This means it cannot be used to make statements about changes in prediction for changes in the input, such as: “If I were to earn €300 more a year, my credit score would increase by 5 points.”</li>
+<li>You need access to the data, not just prediction function.</li>
+<li>Suffers from <strong>inclusion of unrealistic data instances</strong> when features are correlated.<br>
+To simulate that a feature value is missing from a coalition, we marginalize the feature. This is achieved by sampling values from the feature’s marginal distribution. This is fine as long as the features are independent. When features are dependent, then we might sample feature values that do not make sense for this instance.</li>
+</ol>
+<h2 id="additive-feature-attribution-models">Additive Feature Attribution Models</h2>
+<h3 id="intuition--formulation">Intuition &amp; Formulation</h3>
+<p><em>Explanation model</em> - any interpretable approximation of the original model.</p>
+<p>$f$ : original prediction model to be explained<br>
+$g$ : explanation model</p>
+<p>To explain a prediction $f(x)$ based on a single input vector $x$, $g$ uses a simplified input $x'$ that maps to original input via a mapping function.<br>
+$$x = h_x(x')$$<br>
+Local methods try to ensure $g(z') \approx f(h_x(z'))$ whenever $z' \approx x'$.</p>
+<p><strong>Additive feature attribution methods</strong> have an explanation model that is a linear function of binary variables:<br>
+$$g(z') = \phi_0 + \sum_{i=1}^M \phi_i z_i'$$<br>
+where $z' \in {0, 1}^M$ is a coalition vector, $M$ is the number of simplified input features or maximum coalition size, and $\phi_i \in \R$.</p>
+<p>For $x$, the instance of interest, the coalition vector $x’$ is a vector of all 1’s, i.e., all feature values are “present”.<br>
+$$g(x')=\phi_0+\sum_{j=1}^M\phi_j$$</p>
+<h3 id="properties">Properties</h3>
+<p>Shapley values are the only solution that satisfies properties of Efficiency, Symmetry, Dummy and Additivity. SHAP also satisfies these, since it computes Shapley values.</p>
+<p>Some more properties of SHAP:</p>
+<ol>
+<li>Local Accuracy (= Efficiency property)<br>
+$$f(x)=\phi_0+\sum_{j=1}^M\phi_jx_j'=E_X(\hat{f}(X))+\sum_{j=1}^M\phi_j$$</li>
+<li>Missingness</li>
+<li>Consistency =&gt; Linearity, Dummy and Symmetry follow (see Appendix)<br>
+If a model changes so that the marginal contribution of a feature value increases or stays the same (regardless of other features), the Shapley value also increases or stays the same.</li>
+<li></li>
+</ol>
+<h2 id="shap-1">SHAP</h2>
+<p>These are the Shapley values of a conditional expectation function of the original model.</p>
+<p>SHAP values are solution to the following equation, where $f_x(z') = f(h_x(z')) = E[f(z) | z_S]$.<br>
+$$<br>
+\phi_i(f, x) = \sum_{z' \subseteq x'} \frac{|z'|!(M - |z'| - 1)!}{M!} \big[f_{x}(z') - f_x(z' \setminus i)\big]<br>
+$$</p>
+
+    </div>
+  </div>
+</body>
+
+</html>
